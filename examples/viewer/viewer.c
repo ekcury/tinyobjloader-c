@@ -1,5 +1,12 @@
 #define TINYOBJ_LOADER_C_IMPLEMENTATION
 #include "../../tinyobj_loader_c.h"
+#define _WIN_
+#pragma comment(lib,"glew32.lib")
+#pragma comment(lib,"glew32s.lib")
+#pragma comment(lib,"glfw3.lib")
+
+#pragma comment(lib,"opengl.lib")
+#pragma comment(lib,"glu.lib")
 
 #include <GL/glew.h>
 
@@ -7,7 +14,7 @@
 #include <limits.h>
 #include <math.h>
 
-#ifdef _WIN64
+#ifdef _WIN_
 #define atoll(S) _atoi64(S)
 #include <windows.h>
 #else
@@ -84,19 +91,79 @@ static void CalcNormal(float N[3], float v0[3], float v1[3], float v2[3]) {
   }
 }
 
+
+char *g_pData=NULL; 
+static const char* mmap_fileW(size_t* len, const char* filename) 
+{
+
+	HANDLE hfile,hFileMapping;
+	int iPos = 0;
+	const unsigned int BlockSize = 128 * 1024;
+	DWORD dwsize=0;
+	 
+	hfile = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+	if(hfile == INVALID_HANDLE_VALUE)
+	{
+		printf("Erro:mmap_file   CreateFileA=INVALID_HANDLE_VALUE of %s GetLastError %d\n",filename,GetLastError());
+		printf("Could not open %s file, error %d\n", filename, GetLastError());
+		return NULL;
+	}
+
+	dwsize = GetFileSize( hfile, NULL);
+	if (dwsize == 0xFFFFFFFF) 
+	{
+		printf("Error:map_file Getfilesize 0xff\n");
+		return NULL;
+	}
+	
+	g_pData = malloc(dwsize);
+	if(g_pData==NULL)
+		return NULL;
+	hFileMapping = CreateFileMapping(hfile, NULL, PAGE_READONLY, 0, 0, NULL);
+	//assert(fileMapping != INVALID_HANDLE_VALUE);
+	if(hFileMapping == INVALID_HANDLE_VALUE)
+	{
+		printf("Erro:mmap_file   CreateFileMapping=INVALID_HANDLE_of %s \n",filename);
+		return NULL;
+	}
+	while(iPos < dwsize)
+	{
+		int iLeft = dwsize - iPos;
+		int iBytesToRead = iLeft > BlockSize ? BlockSize: iLeft;
+
+		void *rawBuffer = MapViewOfFile(hFileMapping, FILE_MAP_READ, 0, iPos, iBytesToRead);
+		if(rawBuffer!=NULL)
+		{
+			memcpy(&g_pData[iPos], rawBuffer, iBytesToRead);
+			UnmapViewOfFile(rawBuffer);
+		}
+		else
+		{
+			UnmapViewOfFile(rawBuffer);
+			break;
+		}
+
+		iPos += iBytesToRead;
+	}
+	CloseHandle(hfile);
+
+	*len = dwsize;
+
+	if(iPos!=0)
+		return &g_pData[0];
+
+	return NULL;
+}
+
+
+
 static const char* mmap_file(size_t* len, const char* filename) {
-#ifdef _WIN64
-  HANDLE file =
-      CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-                  FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
-  assert(file != INVALID_HANDLE_VALUE);
+#ifdef _WIN_
 
-  HANDLE fileMapping = CreateFileMapping(file, NULL, PAGE_READONLY, 0, 0, NULL);
-  assert(fileMapping != INVALID_HANDLE_VALUE);
+	return mmap_fileW(len,filename);
 
-  LPVOID fileMapView = MapViewOfFile(fileMapping, FILE_MAP_READ, 0, 0, 0);
-  auto fileMapViewChar = (const char*)fileMapView;
-  assert(fileMapView != NULL);
+  
 #else
 
   FILE* f;
@@ -337,6 +404,8 @@ static int LoadObjAndConvert(float bmin[3], float bmax[3],
   tinyobj_attrib_free(&attrib);
   tinyobj_shapes_free(shapes, num_shapes);
   tinyobj_materials_free(materials, num_materials);
+  if(g_pData)
+	  free(g_pData);
 
   return 1;
 }
