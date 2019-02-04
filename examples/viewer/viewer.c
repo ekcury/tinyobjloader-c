@@ -1,12 +1,16 @@
 #define TINYOBJ_LOADER_C_IMPLEMENTATION
 #include "../../tinyobj_loader_c.h"
-#define _WIN_
+/*I built this version in  MSVC10*/
+/*#define _WIN_*/ /*modify WIN64 preprocessor for simple test purpose since I'm on a win32 platform*/
+
+#ifdef _WIN_
+/*library dependencies for compiling msvc*/
 #pragma comment(lib,"glew32.lib")
 #pragma comment(lib,"glew32s.lib")
 #pragma comment(lib,"glfw3.lib")
-
 #pragma comment(lib,"opengl.lib")
 #pragma comment(lib,"glu.lib")
+#endif
 
 #include <GL/glew.h>
 
@@ -14,7 +18,7 @@
 #include <limits.h>
 #include <math.h>
 
-#ifdef _WIN_
+#ifdef _WIN_/*modify WIN64 preprocessor for simple test purpose since I'm on a win32 platform*/
 #define atoll(S) _atoi64(S)
 #include <windows.h>
 #else
@@ -91,7 +95,12 @@ static void CalcNormal(float N[3], float v0[3], float v1[3], float v2[3]) {
   }
 }
 
-
+/*
+mmap_fileW 
+Is a mmap_file version to compile on windows with MSVC I believe that in both 0x86 and 64
+It needs to allocate memory locally, because if the file is too large MapViewOfFile will take the data in pieces
+g_pData is a global variable needs to be released later
+*/
 char *g_pData=NULL; 
 static const char* mmap_fileW(size_t* len, const char* filename) 
 {
@@ -159,7 +168,7 @@ static const char* mmap_fileW(size_t* len, const char* filename)
 
 
 static const char* mmap_file(size_t* len, const char* filename) {
-#ifdef _WIN_
+#ifdef _WIN_/*modify WIN64 preprocessor for simple test purpose since I'm on a win32 platform*/
 
 	return mmap_fileW(len,filename);
 
@@ -404,7 +413,7 @@ static int LoadObjAndConvert(float bmin[3], float bmax[3],
   tinyobj_attrib_free(&attrib);
   tinyobj_shapes_free(shapes, num_shapes);
   tinyobj_materials_free(materials, num_materials);
-  if(g_pData)
+  if(g_pData)/*free global buffer if allocated*/
 	  free(g_pData);
 
   return 1;
